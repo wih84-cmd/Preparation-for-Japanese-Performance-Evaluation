@@ -1,7 +1,7 @@
 import streamlit as st
 import random
 
-# [데이터 최적화] 8143.jpg 프린트물 25개 전체 문항 완벽 반영 및 복수 정답 지정
+# [오류 수정 완료] "이떼라っしゃ이" -> "이떼랏샤이"로 완벽 변경
 QUIZ_DATA = {
     "안녕하세요 (아침 인사)": ["오하요-고자이마스", "오하요고자이마스", "오하요 고자이마스"],
     "안녕하세요 (낮 인사)": ["곤니찌와", "곤니치와"],
@@ -12,7 +12,7 @@ QUIZ_DATA = {
     "처음 뵙겠습니다": ["하지메마시떼", "하지메마시테"],
     "잘 부탁합니다": ["요로시쿠 오네가이시마스", "요로시쿠오네가이시마스"],
     "다녀오겠습니다": ["이떼키마스", "이테키마스", "일떼키마스", "일떼키 마스"],
-    "잘 다녀오세요": ["이떼라っしゃ이", "이떼랏샤이", "이떼라샤이", "이테랏샤이", "일떼랏샤이", "일 떼랏샤이"],
+    "잘 다녀오세요": ["이떼랏샤이", "이테랏샤이", "일떼랏샤이", "이떼라샤이", "이테라샤이"], # 정상 수정 완료!
     "다녀왔습니다": ["다다이마", "타다이마"],
     "잘 다녀왔니?": ["오카에리나사이"],
     "잘 먹겠습니다": ["이따다키마스", "이타다키마스"],
@@ -43,7 +43,7 @@ mode = st.radio(
     key="quiz_mode"
 )
 
-# --- [최적화] 세션 상태 초기화 구조 단일화 ---
+# 세션 상태 초기화 구조 단일화
 if "initialized" not in st.session_state:
     st.session_state.questions = list(QUIZ_DATA.keys())
     random.shuffle(st.session_state.questions)
@@ -64,7 +64,7 @@ if st.session_state.prev_mode != mode:
     st.session_state.prev_mode = mode
     st.rerun()
 
-# --- 퀴즈 로직 루프 ---
+# 퀴즈 로직 루프
 if st.session_state.questions:
     current_q = st.session_state.questions[0]
     correct_answers = QUIZ_DATA[current_q]
@@ -72,9 +72,8 @@ if st.session_state.questions:
     
     st.info(f"**문제: {current_q}**")
     
-    # --- [모드 1] 드롭박스 객관식 모드 ---
+    # [모드 1] 드롭박스 객관식 모드
     if mode == "드롭박스 고르기 (객관식)":
-        # 현재 문제에 대한 보기 생성 (중복 차단 및 딱 한 번만 실행)
         if not st.session_state.options:
             wrong_pool = [ans_list[0] for q, ans_list in QUIZ_DATA.items() if q != current_q]
             selected_wrongs = random.sample(wrong_pool, min(3, len(wrong_pool)))
@@ -82,7 +81,6 @@ if st.session_state.questions:
             random.shuffle(options)
             st.session_state.options = options
             
-        # 드롭박스(selectbox) 구현
         choices = ["-- 선택지를 골라주세요 --"] + st.session_state.options
         user_choice = st.selectbox("알맞은 발음을 선택하세요:", choices, key=f"select_{current_q}")
         
@@ -98,12 +96,11 @@ if st.session_state.questions:
                 st.error(f"❌ 틀렸습니다! 정답은 [{primary_answer}] 입니다.")
                 st.session_state.answered = True
                 
-    # --- [모드 2] 주관식 타이핑 모드 ---
+    # [모드 2] 주관식 타이핑 모드
     else:
         user_input = st.text_input("정답(발음)을 입력하세요:", key=f"text_{current_q}").strip()
         
         if st.button("정답 확인", type="primary"):
-            # 입력값과 정답 데이터 전처리 기법 고도화 (공백, 하이픈 완전 제거 후 비교)
             clean_user = user_input.replace(" ", "").replace("-", "")
             clean_correct_list = [ans.replace(" ", "").replace("-", "") for ans in correct_answers]
             
@@ -116,7 +113,7 @@ if st.session_state.questions:
                 st.error(f"❌ 틀렸습니다! 정답은 [{primary_answer}] 입니다.")
                 st.session_state.answered = True
 
-    # --- 공통 다음 문항 이동 처리 ---
+    # 공통 다음 문항 이동 처리
     if st.session_state.answered:
         if st.button("다음 문제로 👉"):
             st.session_state.questions.pop(0)
