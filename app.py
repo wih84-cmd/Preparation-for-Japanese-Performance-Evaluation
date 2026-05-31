@@ -31,13 +31,10 @@ QUIZ_DATA = {
     "잘 지내십니까?": ["오겐끼데스까", "오겐키데스까", "오겐끼 데스까"]
 }
 
-# ⏱️ 타임어택 총 제한시간 설정 (초 단위)
-TOTAL_LIMIT_TIME = 60 
+st.set_page_config(page_title="일본어 스톱워치 퀴즈", page_icon="⏱️", layout="centered")
 
-st.set_page_config(page_title="일본어 타임어택 퀴즈", page_icon="⚡", layout="centered")
-
-st.title("⚡ 일본어 수행평가 타임어택! ⚡")
-st.caption(f"제한시간 {TOTAL_LIMIT_TIME}초 안에 25문제를 최대한 빠르고 많이 맞혀보세요!")
+st.title("⏱️ 일본어 수행평가 스톱워치 챌린지! ⏱️")
+st.caption("25문제를 모두 완료하는 데 걸리는 최단 시간을 측정합니다. 손가락을 빠르게 움직이세요!")
 
 # 학습 모드 선택
 mode = st.radio(
@@ -47,24 +44,22 @@ mode = st.radio(
     key="quiz_mode"
 )
 
-# --- 🛠️ [버그 해결 핵심] 안전한 세션 초기화 함수 정의 ---
+# --- 🛠️ 안전한 세션 초기화 구조 ---
 def reset_game_state():
     st.session_state.questions = list(QUIZ_DATA.keys())
     random.shuffle(st.session_state.questions)
     st.session_state.score = 0
     st.session_state.total = len(QUIZ_DATA)
     st.session_state.current_answered = False
-    st.session_state.game_over = False
     st.session_state.options = []
     st.session_state.start_time = time.time()
+    st.session_state.final_time = None  # 최종 기록 저장용
     st.session_state.initialized = True
 
-# 하나라도 변수가 누락되어 있다면 완전 재초기화하여 AttributeError 원천 차단
-required_keys = ["questions", "score", "total", "current_answered", "game_over", "options", "start_time", "initialized"]
+required_keys = ["questions", "score", "total", "current_answered", "options", "start_time", "final_time", "initialized"]
 if not all(k in st.session_state for k in required_keys):
     reset_game_state()
 
-# 모드 변경 체크 및 안전 리셋
 if "prev_mode" not in st.session_state:
     st.session_state.prev_mode = mode
 
@@ -73,26 +68,36 @@ if st.session_state.prev_mode != mode:
     reset_game_state()
     st.rerun()
 
-# --- 실시간 남은 시간 계산 ---
-elapsed_time = time.time() - st.session_state.start_time
-remaining_time = max(0.0, TOTAL_LIMIT_TIME - elapsed_time)
+# --- 실시간 경과 시간 계산 ---
+if st.session_state.final_time is None:
+    elapsed_time = time.time() - st.session_state.start_time
+else:
+    elapsed_time = st.session_state.final_time
 
-if remaining_time <= 0:
-    st.session_state.game_over = True
-
-# --- 🏁 게임 종료 화면 제어 ---
-if st.session_state.game_over or not st.session_state.questions:
-    st.balloons()
-    st.header("🏁 타임어택 종료!! 🏁")
-    
-    if remaining_time <= 0:
-        st.error(f"⏰ 시간 초과로 종료되었습니다!")
-    else:
-        st.success(f"🎉 시간 내에 모든 문제를 완료했습니다!")
+# --- 🏁 [게임 완료 화면] 25문제를 모두 마쳤을 때 ---
+if not st.session_state.questions:
+    if st.session_state.final_time is None:
+        st.session_state.final_time = time.time() - st.session_state.start_time
+        elapsed_time = st.session_state.final_time
         
-    st.metric(label="최종 점수", value=f"{st.session_state.score} / {st.session_state.total}")
+    st.balloons()
+    st.header("🏁 챌린지 완료!! 🏁")
+    st.success(f"🎉 모든 문제를 풀고 스톱워치를 정지했습니다!")
     
-    if st.button("다시 도전하기 🔄", type="primary"):
+    # 시간 가독성 포맷팅 (분/초 단위 분리)
+    minutes = int(elapsed_time // 60)
+    seconds = int(elapsed_time % 60)
+    milliseconds = int((elapsed_time - int(elapsed_time)) * 100)
+    
+    if minutes > 0:
+        time_str = f"{minutes}분 {seconds}초 {milliseconds:02d}"
+    else:
+        time_str = f"{seconds}초 {milliseconds:02d}"
+        
+    st.metric(label="⏱️ 최종 소요 시간 (타임 레코드)", value=time_str)
+    st.metric(label="최종 맞힌 개수", value=f"{st.session_state.score} / {st.session_state.total}")
+    
+    if st.button("내 기록 깨러 가기 (재도전) 🔄", type="primary"):
         reset_game_state()
         st.rerun()
     st.stop()
@@ -102,9 +107,11 @@ current_q = st.session_state.questions[0]
 correct_answers = QUIZ_DATA[current_q]
 primary_answer = correct_answers[0]
 
-st.info(f"**문제: {current_q}**")
+# 현재 몇 번째 문제인지 계산
+current_index = st.session_state.total - len(st.session_state.questions) + 1
+st.info(f"**문제 {current_index}/{st.session_state.total}: {current_q}**")
 
-# 상단 실시간 타이머 바가 들어갈 자리
+# 상단 실시간 스톱워치 및 진행도 바가 들어갈 자리
 timer_placeholder = st.empty()
 
 # --- [모드 1] 드롭박스 객관식 ---
@@ -160,22 +167,18 @@ if st.session_state.current_answered:
         
 st.write(f"현재 맞힌 개수: {st.session_state.score} / {st.session_state.total}")
 
-# --- 🔥 실시간 전체 타이머 다운카운트 루프 ---
+# --- 🔥 [핵심] 실시간 스톱워치 업카운트 및 진행바 제어 루프 ---
+progress_percent = (st.session_state.total - len(st.session_state.questions)) / st.session_state.total
+
 if not st.session_state.current_answered:
-    while remaining_time > 0:
+    while True:
         elapsed_time = time.time() - st.session_state.start_time
-        remaining_time = max(0.0, TOTAL_LIMIT_TIME - elapsed_time)
-        
         with timer_placeholder.container():
-            st.progress(remaining_time / TOTAL_LIMIT_TIME)
-            st.write(f"⏳ **전체 남은 시간: {int(remaining_time)}초**")
-            
-        if remaining_time <= 0:
-            st.session_state.game_over = True
-            st.rerun()
-            
-        time.sleep(0.2)
+            st.progress(progress_percent) # 문제 진행도를 게이지바로 표시
+            st.write(f"⏱️ **현재 경과 시간: {elapsed_time:.1f}초**")
+        time.sleep(0.1) # 0.1초 단위로 빠르게 스톱워치를 갱신
 else:
+    # 정답을 확인하고 다음 버튼을 누르기 전 대기 시간 동안 화면 유지
     with timer_placeholder.container():
-        st.progress(remaining_time / TOTAL_LIMIT_TIME)
-        st.write(f"⏳ **전체 남은 시간: {int(remaining_time)}초 (정답 확인 완료, 어서 다음으로 넘어가세요!)**")
+        st.progress(progress_percent)
+        st.write(f"⏱️ **현재 경과 시간: {elapsed_time:.1f}초 (정답 확인 완료, 기록 단축을 위해 무브무브!)**")
