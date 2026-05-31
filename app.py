@@ -2,7 +2,7 @@ import streamlit as st
 import random
 import time
 
-# 8143.jpg 프린트물 25개 전체 문항 데이터
+# [데이터] 8143.jpg 프린트물 25개 전체 문항 데이터
 QUIZ_DATA = {
     "안녕하세요 (아침 인사)": ["오하요-고자이마스", "오하요고자이마스", "오하요 고자이마스"],
     "안녕하세요 (낮 인사)": ["곤니찌와", "곤니치와"],
@@ -31,7 +31,7 @@ QUIZ_DATA = {
     "잘 지내십니까?": ["오겐끼데스까", "오겐키데스까", "오겐끼 데스까"]
 }
 
-# ⏱️ 타임어택 총 제한시간 설정 (초 단위 - 60초가 국룰!)
+# ⏱️ 타임어택 총 제한시간 설정 (초 단위)
 TOTAL_LIMIT_TIME = 60 
 
 st.set_page_config(page_title="일본어 타임어택 퀴즈", page_icon="⚡", layout="centered")
@@ -47,29 +47,36 @@ mode = st.radio(
     key="quiz_mode"
 )
 
-# --- 세션 상태 초기화 ---
-if "initialized" not in st.session_state:
+# --- 🛠️ [버그 해결 핵심] 안전한 세션 초기화 함수 정의 ---
+def reset_game_state():
     st.session_state.questions = list(QUIZ_DATA.keys())
     random.shuffle(st.session_state.questions)
     st.session_state.score = 0
     st.session_state.total = len(QUIZ_DATA)
-    st.session_state.current_answered = False # 현재 문제 정답 확인 여부
+    st.session_state.current_answered = False
     st.session_state.game_over = False
     st.session_state.options = []
-    st.session_state.prev_mode = mode
-    st.session_state.start_time = time.time()  # 게임 시작 시간 딱 한번 기록!
+    st.session_state.start_time = time.time()
     st.session_state.initialized = True
 
-# 모드 변경 시 게임 완전 리셋 및 타이머 재시작
+# 하나라도 변수가 누락되어 있다면 완전 재초기화하여 AttributeError 원천 차단
+required_keys = ["questions", "score", "total", "current_answered", "game_over", "options", "start_time", "initialized"]
+if not all(k in st.session_state for k in required_keys):
+    reset_game_state()
+
+# 모드 변경 체크 및 안전 리셋
+if "prev_mode" not in st.session_state:
+    st.session_state.prev_mode = mode
+
 if st.session_state.prev_mode != mode:
-    del st.session_state.initialized
+    st.session_state.prev_mode = mode
+    reset_game_state()
     st.rerun()
 
 # --- 실시간 남은 시간 계산 ---
 elapsed_time = time.time() - st.session_state.start_time
 remaining_time = max(0.0, TOTAL_LIMIT_TIME - elapsed_time)
 
-# 시간이 다 되면 게임오버 플래그 활성화
 if remaining_time <= 0:
     st.session_state.game_over = True
 
@@ -86,9 +93,9 @@ if st.session_state.game_over or not st.session_state.questions:
     st.metric(label="최종 점수", value=f"{st.session_state.score} / {st.session_state.total}")
     
     if st.button("다시 도전하기 🔄", type="primary"):
-        del st.session_state.initialized
+        reset_game_state()
         st.rerun()
-    st.stop()  # 이후 게임 화면 렌더링 중단
+    st.stop()
 
 # --- 🕹️ 게임 진행 화면 구역 ---
 current_q = st.session_state.questions[0]
@@ -145,7 +152,7 @@ else:
 
 # --- 다음 문항 이동 처리 ---
 if st.session_state.current_answered:
-    if st.button("다음 문제로 👉 (Enter 가능)"):
+    if st.button("다음 문제로 👉"):
         st.session_state.questions.pop(0)
         st.session_state.options = []   
         st.session_state.current_answered = False 
@@ -153,8 +160,7 @@ if st.session_state.current_answered:
         
 st.write(f"현재 맞힌 개수: {st.session_state.score} / {st.session_state.total}")
 
-# --- 🔥 [핵심] 실시간 전체 타이머 다운카운트 루프 ---
-# 정답 확인 버튼을 누르기 전 대기 상태일 때만 실시간으로 시간을 차감합니다.
+# --- 🔥 실시간 전체 타이머 다운카운트 루프 ---
 if not st.session_state.current_answered:
     while remaining_time > 0:
         elapsed_time = time.time() - st.session_state.start_time
@@ -168,9 +174,8 @@ if not st.session_state.current_answered:
             st.session_state.game_over = True
             st.rerun()
             
-        time.sleep(0.2) # 0.2초마다 화면을 갱신해 실시간 초시계 구현
+        time.sleep(0.2)
 else:
-    # 정답을 확인한 순간에는 오답을 읽을 수 있게 타이머의 화면 갱신 일시 정지
     with timer_placeholder.container():
         st.progress(remaining_time / TOTAL_LIMIT_TIME)
         st.write(f"⏳ **전체 남은 시간: {int(remaining_time)}초 (정답 확인 완료, 어서 다음으로 넘어가세요!)**")
